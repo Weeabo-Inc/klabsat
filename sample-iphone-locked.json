@@ -1,0 +1,34 @@
+{
+    "_comment": "SAMPLE DATA - not a real capture. A real iPhone is on the bus and usbmux sees it, but it is LOCKED / NOT TRUSTED, so no detail query works. This is the 'detected but not queryable' state the dashboard must render. Run: python dashboard.py --port 8791 --iphone sample-iphone-locked.json",
+    "seq": 87,
+    "timestamp": "2026-10-03T06:33:12.550Z",
+    "usb": {
+        "present": true,
+        "likely_iphone": true,
+        "devices": [
+            { "status": "OK", "class": "USB", "friendly_name": "Apple Mobile Device (Composite)", "instance_id": "USB\\VID_05AC&PID_12A8\\7&2B41C7D0&0&1" },
+            { "status": "OK", "class": "USB", "friendly_name": "Apple Mobile Device (Composite)", "instance_id": "USB\\VID_05AC&PID_12A8&MI_00\\7&2B41C7D0&0&0000" },
+            { "status": "OK", "class": "PortableDevice", "friendly_name": "Apple iPhone", "instance_id": "USB\\VID_05AC&PID_12A8&MI_01\\7&2B41C7D0&0&0001" },
+            { "status": "OK", "class": "WPD", "friendly_name": "Apple iPhone", "instance_id": "USB\\VID_05AC&PID_12A8&MI_01\\7&2B41C7D0&0&0002" },
+            { "status": "Error", "class": "USBDevice", "friendly_name": "Apple Mobile Device USB Device", "instance_id": "USB\\VID_05AC&PID_12A8&MI_02\\7&2B41C7D0&0&0003" }
+        ],
+        "note": "Apple iPhone detected on USB; device service not queryable"
+    },
+    "usbmux_ids": {
+        "6f1d9c4e2b8a7f30d5c1e9a4b7f2d6081c3e5a79": {
+            "udid": "6f1d9c4e2b8a7f30d5c1e9a4b7f2d6081c3e5a79",
+            "connection_type": "USB",
+            "product_id": "12a8"
+        }
+    },
+    "device": {
+        "available": false,
+        "error": "No device found!"
+    },
+    "device_count": 0,
+    "warnings": [
+        "SAMPLE DATA: this file is a hand-written fixture, not a live capture.",
+        "iPhone is locked. Unlock the screen and tap Trust to allow this computer."
+    ],
+    "interval_ms": 4000
+}

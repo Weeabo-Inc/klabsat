@@ -1,0 +1,58 @@
+{
+    "_comment": "SAMPLE DATA - not a real capture. A trusted, booted iPhone (PID 12A8) is queryable AND an Apple Magic Keyboard (PID 024F, a HID peripheral - NOT a phone) is attached at the same time. The usb.devices array deliberately contains 18 rows for only 2 physical devices, so you can see the dashboard's dedup-by-PID working. Run: python dashboard.py --port 8791 --iphone sample-iphone.json",
+    "seq": 412,
+    "timestamp": "2026-10-03T06:31:55.204Z",
+    "usb": {
+        "present": true,
+        "likely_iphone": true,
+        "devices": [
+            { "status": "OK", "class": "USB", "friendly_name": "Apple Mobile Device (Composite)", "instance_id": "USB\\VID_05AC&PID_12A8\\7&2B41C7D0&0&1" },
+            { "status": "OK", "class": "USB", "friendly_name": "Apple Mobile Device (Composite)", "instance_id": "USB\\VID_05AC&PID_12A8&MI_00\\7&2B41C7D0&0&0000" },
+            { "status": "OK", "class": "PortableDevice", "friendly_name": "Apple iPhone", "instance_id": "USB\\VID_05AC&PID_12A8&MI_01\\7&2B41C7D0&0&0001" },
+            { "status": "OK", "class": "WPD", "friendly_name": "Apple iPhone", "instance_id": "USB\\VID_05AC&PID_12A8&MI_01\\7&2B41C7D0&0&0002" },
+            { "status": "OK", "class": "USBDevice", "friendly_name": "Apple Mobile Device USB Device", "instance_id": "USB\\VID_05AC&PID_12A8&MI_02\\7&2B41C7D0&0&0003" },
+            { "status": "OK", "class": "Net", "friendly_name": "Apple Mobile Device Ethernet", "instance_id": "USB\\VID_05AC&PID_12A8&MI_03\\7&2B41C7D0&0&0004" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "USB Input Device", "instance_id": "USB\\VID_05AC&PID_024F&MI_01\\7&FF81860&0&0001" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "USB Input Device", "instance_id": "USB\\VID_05AC&PID_024F&MI_00\\7&FF81860&0&0000" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "HID-compliant system controller", "instance_id": "HID\\VID_05AC&PID_024F&MI_02&COL02\\8&3A046CE3&0&0001" },
+            { "status": "OK", "class": "USB", "friendly_name": "USB Composite Device", "instance_id": "USB\\VID_05AC&PID_024F\\6&3AF0F9CE&0&12" },
+            { "status": "OK", "class": "Keyboard", "friendly_name": "HID Keyboard Device", "instance_id": "HID\\VID_05AC&PID_024F&MI_02&COL03\\8&3A046CE3&0&0002" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "HID-compliant system multi-axis controller", "instance_id": "HID\\VID_05AC&PID_024F&MI_02&COL04\\8&3A046CE3&0&0003" },
+            { "status": "OK", "class": "Keyboard", "friendly_name": "HID Keyboard Device", "instance_id": "HID\\VID_05AC&PID_024F&MI_00\\8&613A43467&0&0000" },
+            { "status": "OK", "class": "Mouse", "friendly_name": "HID-compliant mouse", "instance_id": "HID\\VID_05AC&PID_024F&MI_01\\8&26D450A5&0&0000" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "HID-compliant vendor-defined device", "instance_id": "HID\\VID_05AC&PID_024F&MI_02&COL05\\8&3A046CE3&0&0004" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "HID-compliant vendor-defined device", "instance_id": "HID\\VID_05AC&PID_024F&MI_03\\8&3B95E2D1&0&0000" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "HID-compliant consumer control device", "instance_id": "HID\\VID_05AC&PID_024F&MI_02&COL01\\8&3A046CE3&0&0000" },
+            { "status": "OK", "class": "HIDClass", "friendly_name": "HID-compliant vendor-defined device", "instance_id": "HID\\VID_05AC&PID_024F&MI_04\\8&2865C693&0&0000" }
+        ],
+        "note": "Apple iPhone composite device present (PID 12A8); an Apple Magic Keyboard (PID 024F) HID peripheral is also attached"
+    },
+    "usbmux_ids": {
+        "6f1d9c4e2b8a7f30d5c1e9a4b7f2d6081c3e5a79": {
+            "udid": "6f1d9c4e2b8a7f30d5c1e9a4b7f2d6081c3e5a79",
+            "connection_type": "USB",
+            "product_id": "12a8"
+        }
+    },
+    "device": {
+        "available": true,
+        "udid": "6f1d9c4e2b8a7f30d5c1e9a4b7f2d6081c3e5a79",
+        "name": "iPhone",
+        "product_type": "iPhone8,4",
+        "ios_version": "15.8.3",
+        "build": "19H380",
+        "model": "N69AP",
+        "serial": "F4GXN0ABCDEF",
+        "battery_pct": 42,
+        "charging": "true",
+        "fully_charged": "false",
+        "battery_keys": ["BatteryCurrentCapacity", "BatteryIsCharging", "ExternalConnected", "FullyCharged"],
+        "error": null
+    },
+    "device_count": 1,
+    "warnings": [
+        "SAMPLE DATA: this file is a hand-written fixture, not a live capture.",
+        "iPhone battery is at 42% and falling while the cable is attached - check the Lightning port."
+    ],
+    "interval_ms": 4000
+}

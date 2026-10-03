@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhoneWatch - eyes on the work</title>
+<!--
+  PHONEWATCH DASHBOARD - single self-contained page.
+  No build step, no npm, no CDN, no external fonts/images. Works fully offline.
+  Polls /api/state AND /api/iphone every 2s and re-renders in place (no page
+  reload). Two device cards: the Samsung phone (state.json) and the attached
+  iPhone (iphone.json).
+-->
+<style>
+:root{
+  --bg:#0a0e13; --bg2:#0e141b; --panel:#111922; --panel2:#151f2a; --line:#1e2b38;
+  --fg:#e6edf3; --fg2:#9fb0c0; --fg3:#6b7c8c;
+  --accent:#58a6ff;
+  --ok:#3fb950; --ok-bg:rgba(63,185,80,.13); --ok-line:rgba(63,185,80,.45);
+  --warn:#d29922; --warn-bg:rgba(210,153,34,.14); --warn-line:rgba(210,153,34,.5);
+  --bad:#f85149; --bad-bg:rgba(248,81,73,.14); --bad-line:rgba(248,81,73,.55);
+  --info:#58a6ff; --info-bg:rgba(88,166,255,.13); --info-line:rgba(88,166,255,.45);
+  --purple:#a371f7; --purple-bg:rgba(163,113,247,.14); --purple-line:rgba(163,113,247,.45);
+  --gray-bg:rgba(139,148,158,.12); --gray-line:rgba(139,148,158,.35);
+  --mono:ui-monospace,"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+     radial-gradient(1200px 600px at 15% -10%, #12202e 0%, transparent 60%),
+     radial-gradient(900px 500px at 100% 0%, #16202b 0%, transparent 55%),
+     var(--bg);
+  color:var(--fg); font-family:var(--sans); font-size:14px; line-height:1.5;
+  min-height:100vh; padding:18px 20px 60px;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1280px;margin:0 auto}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:16px;letter-spacing:.14em;text-transform:uppercase;margin:0;font-weight:650;color:var(--fg)}
+h1 .dot{color:var(--accent)}
+.sub{color:var(--fg3);font-size:12px;font-family:var(--mono)}
+.spacer{flex:1 1 auto}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;
+  border:1px solid var(--line);background:var(--panel);font-family:var(--mono);font-size:12px;
+  color:var(--fg2);white-space:nowrap;
+}
+.pill .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(63,185,80,.7);animation:pulse 2s infinite}
+.pill.stale .live{background:var(--bad);animation:none;box-shadow:none}
+.pill.stale{color:var(--bad);border-color:var(--bad-line);background:var(--bad-bg)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.6)}70%{box-shadow:0 0 0 7px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
+
+/* ---------- banners ---------- */
+.banner{
+  display:flex;gap:12px;align-items:flex-start;border-radius:10px;padding:12px 14px;
+  margin-bottom:12px;border:1px solid var(--line);background:var(--panel);
+}
+.banner .ico{font-size:18px;line-height:1.2;flex:0 0 auto}
+.banner .txt{min-width:0}
+.banner .t{font-weight:650;letter-spacing:.02em}
+.banner .d{color:var(--fg2);font-size:12.5px;word-break:break-word}
+.banner.bad{border-color:var(--bad-line);background:var(--bad-bg)}
+.banner.bad .t{color:var(--bad)}
+.banner.warn{border-color:var(--warn-line);background:var(--warn-bg)}
+.banner.warn .t{color:var(--warn)}
+.banner.info{border-color:var(--info-line);background:var(--info-bg)}
+.banner.info .t{color:var(--info)}
+.banner.hidden{display:none}
+
+/* ---------- grid + cards ---------- */
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+@media (max-width:940px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{
+  background:linear-gradient(180deg,var(--panel) 0%,var(--bg2) 100%);
+  border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;
+  box-shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 8px 24px rgba(0,0,0,.25);
+}
+.card h2{
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--fg3);
+  margin:0 0 12px;font-weight:650;display:flex;align-items:center;gap:8px;
+}
+.card h2::after{content:"";flex:1 1 auto;height:1px;background:var(--line)}
+
+.kv{display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 12px;font-size:13px}
+.kv .k{color:var(--fg3);font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;padding-top:2px}
+.kv .v{font-family:var(--mono);word-break:break-word;color:var(--fg)}
+.dim{color:var(--fg3)}
+
+/* ---------- the big phone card ---------- */
+.phone{border-width:1px;transition:border-color .25s, background .25s}
+.phone.mode-descriptor_failed{border-color:var(--bad-line);background:linear-gradient(180deg,var(--bad-bg) 0%,var(--bg2) 85%)}
+.phone.mode-download{border-color:var(--info-line);background:linear-gradient(180deg,var(--info-bg) 0%,var(--bg2) 85%)}
+.phone.mode-mtp,.phone.mode-adb{border-color:var(--ok-line);background:linear-gradient(180deg,var(--ok-bg) 0%,var(--bg2) 85%)}
+.phone.mode-unknown{border-color:var(--gray-line)}
+.phone.mode-absent{border-color:var(--gray-line);background:linear-gradient(180deg,var(--gray-bg) 0%,var(--bg2) 85%)}
+
+.modebig{
+  display:flex;align-items:center;gap:14px;margin:2px 0 14px;padding:14px 16px;border-radius:10px;
+  border:1px solid var(--line);background:rgba(0,0,0,.22);
+}
+.modebig .glyph{font-size:34px;line-height:1;flex:0 0 auto;width:44px;text-align:center}
+.modebig .mtext{min-width:0}
+.modebig .mtitle{font-size:27px;font-weight:750;letter-spacing:.01em;line-height:1.1;font-family:var(--mono)}
+.modebig .mnote{font-size:12.5px;color:var(--fg2);margin-top:3px}
+.modebig.bad{border-color:var(--bad-line);background:var(--bad-bg)}
+.modebig.bad .mtitle{color:var(--bad)}
+.modebig.ok{border-color:var(--ok-line);background:var(--ok-bg)}
+.modebig.ok .mtitle{color:var(--ok)}
+.modebig.info{border-color:var(--info-line);background:var(--info-bg)}
+.modebig.info .mtitle{color:var(--info)}
+.modebig.grey{border-color:var(--gray-line);background:var(--gray-bg)}
+.modebig.grey .mtitle{color:var(--fg2)}
+.modebig.purple{border-color:var(--purple-line);background:var(--purple-bg)}
+.modebig.purple .mtitle{color:var(--purple)}
+.bigpill{
+  margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:11px;padding:5px 10px;
+  border-radius:999px;border:1px solid var(--line);color:var(--fg3);text-transform:uppercase;letter-spacing:.1em;
+}
+
+/* ---------- combined "both phones" summary ---------- */
+ .bothgrid{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);gap:7px 12px;align-items:center}
+@media (max-width:700px){.bothgrid{grid-template-columns:auto minmax(0,1fr)}}
+.bothgrid .bk{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg3);white-space:nowrap}
+.bothgrid .bv{font-family:var(--mono);font-size:12px;color:var(--fg2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bothgrid .bv.bad{color:var(--bad)}
+.bothgrid .bv.warn{color:var(--warn)}
+.bothgrid .bv.ok{color:var(--ok)}
+
+/* ---------- iPhone card ---------- */
+.iphone.mode-iq-no_data{border-color:var(--gray-line);background:linear-gradient(180deg,var(--gray-bg) 0%,var(--bg2) 85%)}
+.iphone.mode-iq-no_device{border-color:var(--gray-line);background:linear-gradient(180deg,var(--gray-bg) 0%,var(--bg2) 85%)}
+.iphone.mode-iq-usb_activity{border-color:var(--info-line);background:linear-gradient(180deg,var(--info-bg) 0%,var(--bg2) 85%)}
+.iphone.mode-iq-peripheral_only{border-color:var(--warn-line);background:linear-gradient(180deg,var(--warn-bg) 0%,var(--bg2) 85%)}
+.iphone.mode-iq-not_queryable{border-color:var(--warn-line);background:linear-gradient(180deg,var(--warn-bg) 0%,var(--bg2) 85%)}
+.iphone.mode-iq-queryable{border-color:var(--ok-line);background:linear-gradient(180deg,var(--ok-bg) 0%,var(--bg2) 85%)}
+.modebig.warn{border-color:var(--warn-line);background:var(--warn-bg)}
+.modebig.warn .mtitle{color:var(--warn)}
+
+/* warnings inside the iPhone card - rendered prominently */
+.warnbox{margin:0 0 12px;border:1px solid var(--warn-line);background:var(--warn-bg);
+  border-radius:9px;padding:9px 12px}
+.warnbox.bad{border-color:var(--bad-line);background:var(--bad-bg)}
+.warnbox .wh{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--warn);font-weight:650;margin-bottom:5px}
+.warnbox.bad .wh{color:var(--bad)}
+.warnbox ul{margin:0;padding-left:17px}
+.warnbox li{font-size:12.5px;color:var(--fg2);word-break:break-word}
+.warnbox li + li{margin-top:3px}
+
+/* battery bar */
+.batt{display:flex;align-items:center;gap:10px}
+.batt .shell{position:relative;flex:1 1 auto;height:14px;border-radius:4px;background:rgba(0,0,0,.4);
+  border:1px solid var(--line);overflow:hidden;min-width:90px}
+.batt .fill{display:block;height:100%;width:0;background:var(--ok);transition:width .3s}
+.batt .fill.mid{background:var(--warn)}
+.batt .fill.low{background:var(--bad)}
+.batt .ftext{font-family:var(--mono);font-size:12px;color:var(--fg2);margin-left:auto;white-space:nowrap}
+
+/* ---------- chips ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11.5px;
+  padding:2px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--fg2);
+  white-space:nowrap;
+}
+.chip.ok{color:var(--ok);border-color:var(--ok-line);background:var(--ok-bg)}
+.chip.bad{color:var(--bad);border-color:var(--bad-line);background:var(--bad-bg)}
+.chip.warn{color:var(--warn);border-color:var(--warn-line);background:var(--warn-bg)}
+.chip.info{color:var(--info);border-color:var(--info-line);background:var(--info-bg)}
+.chip.purple{color:var(--purple);border-color:var(--purple-line);background:var(--purple-bg)}
+.chip.grey{color:var(--fg3)}
+.chiprow{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+
+/* ---------- tables / lists ---------- */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{
+  text-align:left;color:var(--fg3);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  font-weight:650;padding:0 10px 6px 0;border-bottom:1px solid var(--line);
+}
+td{padding:5px 10px 5px 0;border-bottom:1px solid rgba(30,43,56,.5);font-family:var(--mono);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.wide{font-family:var(--sans)}
+.empty{color:var(--fg3);font-size:12.5px;font-style:italic;padding:4px 0}
+.mono{font-family:var(--mono)}
+
+/* ---------- timeline ---------- */
+.tlbar{display:flex;height:44px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#0a0e13}
+.tlseg{position:relative;min-width:3px;cursor:default;transition:filter .12s}
+.tlseg:hover{filter:brightness(1.45)}
+.tlseg.m-descriptor_failed{background:#f85149}
+.tlseg.m-download{background:#58a6ff}
+.tlseg.m-mtp{background:#3fb950}
+.tlseg.m-adb{background:#2ea043}
+.tlseg.m-absent{background:#39424d}
+.tlseg.m-unknown{background:#8b949e}
+.tlticks{display:flex;justify-content:space-between;color:var(--fg3);font-size:10.5px;
+  font-family:var(--mono);margin-top:5px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--fg2)}
+.legend span.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.events{margin-top:12px;max-height:230px;overflow:auto;border-top:1px solid var(--line);padding-top:8px}
+.events .ev{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
+  padding:3px 0;font-size:12.5px;border-bottom:1px solid rgba(30,43,56,.35)}
+.events .ev:last-child{border-bottom:0}
+.events .t{font-family:var(--mono);color:var(--fg3);font-size:11.5px}
+.events .what{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.events .dur{font-family:var(--mono);color:var(--fg3);font-size:11.5px}
+.spark{width:100%;height:38px;display:block;border-radius:6px;background:rgba(0,0,0,.25);border:1px solid var(--line)}
+.sparkmeta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--fg3);margin-top:4px}
+
+/* ---------- raw json ---------- */
+details{border:1px solid var(--line);border-radius:9px;background:rgba(0,0,0,.25);overflow:hidden}
+details[open]{background:rgba(0,0,0,.35)}
+summary{cursor:pointer;padding:9px 13px;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--fg3);font-weight:650;user-select:none;list-style:none;display:flex;align-items:center;gap:9px}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"\25B6";font-size:9px;color:var(--fg3);transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+summary .note{margin-left:auto;text-transform:none;letter-spacing:0;font-family:var(--mono);color:var(--fg3);font-size:11px}
+pre{margin:0;padding:12px 14px;overflow:auto;max-height:440px;font-family:var(--mono);font-size:11.5px;
+  color:#a5d6ff;border-top:1px solid var(--line);white-space:pre-wrap;word-break:break-word}
+.toolbar{display:flex;gap:8px;align-items:center;margin-left:auto}
+button{
+  font-family:var(--mono);font-size:11.5px;color:var(--fg2);background:var(--panel2);
+  border:1px solid var(--line);border-radius:7px;padding:4px 10px;cursor:pointer;
+}
+button:hover{color:var(--fg);border-color:#2d4053}
+.note-line{color:var(--fg3);font-size:11.5px;margin-top:8px}
+.warnrow{background:var(--warn-bg)}
+.warnrow td{color:var(--warn)}
+.badrow{background:var(--bad-bg)}
+.err{color:var(--bad);font-family:var(--mono);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>PhoneWatch<span class="dot">.</span></h1>
+    <span class="sub" id="conn">connecting…</span>
+    <span class="spacer"></span>
+    <span class="pill" id="updpill"><span class="live"></span><span id="updtxt">waiting for first poll</span></span>
+    <span class="pill" id="seqpill">seq —</span>
+    <button id="refreshBtn" title="poll both feeds right now">refresh</button>
+  </header>
+
+  <!-- combined glance: both phones, one line each -->
+  <div class="card" id="bothCard">
+    <h2>Both phones <span class="toolbar"><span class="chip grey" id="bothChip">waiting</span></span></h2>
+    <div class="bothgrid">
+      <div class="bk">Samsung</div>
+      <div class="bv" id="bothSamsung">waiting for /api/state&hellip;</div>
+      <div class="bk">iPhone</div>
+      <div class="bv" id="bothIphone">waiting for /api/iphone&hellip;</div>
+      <div class="bk">Samsung feed</div>
+      <div class="bv" id="bothSamsungAge">&mdash;</div>
+      <div class="bk">iPhone feed</div>
+      <div class="bv" id="bothIphoneAge">&mdash;</div>
+    </div>
+  </div>
+
+  <!-- banners (hidden by default) -->
+  <div class="banner bad hidden" id="bnStale">
+    <span class="ico">&#9203;</span>
+    <div class="txt">
+      <div class="t">UPDATE STREAM STALE</div>
+      <div class="d" id="bnStaleD">No fresh snapshot has arrived.</div>
+    </div>
+  </div>
+  <div class="banner bad hidden" id="bnFail">
+    <span class="ico">&#9888;</span>
+    <div class="txt">
+      <div class="t">DESCRIPTOR FAILED</div>
+      <div class="d" id="bnFailD">Windows enumerated the device but the USB descriptor request failed.</div>
+    </div>
+  </div>
+  <div class="banner warn hidden" id="bnProc">
+    <span class="ico">&#9888;</span>
+    <div class="txt">
+      <div class="t">HANDLE HOLDER(S) PRESENT</div>
+      <div class="d" id="bnProcD"></div>
+    </div>
+  </div>
+  <div class="banner info hidden" id="bnAdb">
+    <span class="ico">&#8505;</span>
+    <div class="txt">
+      <div class="t">ADB SERVER ACTIVE</div>
+      <div class="d" id="bnAdbD"></div>
+    </div>
+  </div>
+  <div class="banner info hidden" id="bnNoData">
+    <span class="ico">&#128269;</span>
+    <div class="txt">
+      <div class="t">WAITING FOR state.json</div>
+      <div class="d" id="bnNoDataD"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ============ LEFT ============ -->
+    <div>
+      <div class="card phone" id="phoneCard">
+        <h2>Phone <span class="toolbar"><span class="chip" id="devPresence">presence —</span></span></h2>
+        <div class="modebig grey" id="modeBig">
+          <div class="glyph" id="modeGlyph">&#9679;</div>
+          <div class="mtext">
+            <div class="mtitle" id="modeTitle">&mdash;</div>
+            <div class="mnote" id="modeNote">waiting for data</div>
+          </div>
+          <div class="bigpill" id="modeSeen">no snapshot</div>
+        </div>
+        <div class="kv">
+          <div class="k">Friendly name</div><div class="v" id="kName">&mdash;</div>
+          <div class="k">Status</div><div class="v" id="kStatus">&mdash;</div>
+          <div class="k">Service</div><div class="v" id="kService">&mdash;</div>
+          <div class="k">Driver</div><div class="v" id="kDriver">&mdash;</div>
+          <div class="k">Instance ID</div><div class="v" id="kInstance">&mdash;</div>
+          <div class="k">Problem code</div><div class="v" id="kProblem">&mdash;</div>
+          <div class="k">Snapshot age</div><div class="v" id="kAge">&mdash;</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>State timeline <span class="toolbar"><span class="chip grey" id="tlCount">0 points</span></span></h2>
+        <div class="tlbar" id="tlbar"><div class="tlseg m-unknown" style="flex:1 1 auto" title="no history yet"></div></div>
+        <div class="tlticks"><span id="tickFrom">—</span><span id="tickMid"></span><span id="tickTo">now</span></div>
+        <div class="legend">
+          <span><span class="sw" style="background:#f85149"></span>descriptor_failed</span>
+          <span><span class="sw" style="background:#58a6ff"></span>download</span>
+          <span><span class="sw" style="background:#3fb950"></span>mtp</span>
+          <span><span class="sw" style="background:#2ea043"></span>adb</span>
+          <span><span class="sw" style="background:#39424d"></span>absent</span>
+          <span><span class="sw" style="background:#8b949e"></span>unknown</span>
+        </div>
+        <div class="events" id="events"><div class="empty">no history.jsonl yet — the timeline fills in as phonewatch appends snapshots.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Processes seen <span class="toolbar"><span class="chip grey" id="procCount">0</span></span></h2>
+        <div id="procBody"><div class="empty">no process list in snapshot</div></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT ============ -->
+    <div>
+      <div class="card iphone" id="iphoneCard">
+        <h2>iPhone <span class="toolbar">
+          <span class="chip" id="ipPresence">presence &mdash;</span>
+          <span class="chip" id="ipFresh">feed &mdash;</span>
+        </span></h2>
+
+        <div class="modebig grey" id="ipModeBig">
+          <div class="glyph" id="ipModeGlyph">&#9679;</div>
+          <div class="mtext">
+            <div class="mtitle" id="ipModeTitle">&mdash;</div>
+            <div class="mnote" id="ipModeNote">waiting for /api/iphone</div>
+          </div>
+          <div class="bigpill" id="ipModeSeen">no snapshot</div>
+        </div>
+
+        <div id="ipWarn"></div>
+
+        <div class="kv">
+          <div class="k">Device name</div><div class="v" id="ipName">&mdash;</div>
+          <div class="k">Product type</div><div class="v" id="ipProduct">&mdash;</div>
+          <div class="k">iOS version</div><div class="v" id="ipIos">&mdash;</div>
+          <div class="k">Build</div><div class="v" id="ipBuild">&mdash;</div>
+          <div class="k">Model</div><div class="v" id="ipModel">&mdash;</div>
+          <div class="k">Serial</div><div class="v" id="ipSerial">&mdash;</div>
+          <div class="k">UDID</div><div class="v" id="ipUdid">&mdash;</div>
+          <div class="k">Battery</div><div class="v" id="ipBatt">
+            <div class="batt">
+              <span class="shell" id="ipBattBar" title="battery level not reported"><span class="fill" id="ipBattFill"></span></span>
+              <span class="ftext" id="ipBattText">&mdash;</span>
+            </div>
+          </div>
+          <div class="k">Device error</div><div class="v" id="ipDevErr">&mdash;</div>
+          <div class="k">usbmux IDs</div><div class="v" id="ipMux">&mdash;</div>
+          <div class="k">USB note</div><div class="v" id="ipUsbNote">&mdash;</div>
+          <div class="k">Snapshot age</div><div class="v" id="ipAge">&mdash;</div>
+        </div>
+
+        <h2 style="margin-top:16px">Apple USB devices
+          <span class="toolbar"><span class="chip grey" id="ipDevCount">0</span></span></h2>
+        <div id="ipDevices"><div class="empty">waiting for /api/iphone&hellip;</div></div>
+        <div class="note-line" id="ipDedupNote"></div>
+      </div>
+
+      <div class="card">
+        <h2>LAN reachability</h2>
+        <div class="kv">
+          <div class="k">Reachable</div><div class="v" id="lanReach">&mdash;</div>
+          <div class="k">Latency</div><div class="v" id="lanLat">&mdash;</div>
+        </div>
+        <canvas class="spark" id="latSpark" width="600" height="76"></canvas>
+        <div class="sparkmeta"><span id="latMin">min —</span><span id="latSamples">0 samples</span><span id="latMax">max —</span></div>
+      </div>
+
+      <div class="card">
+        <h2>ADB <span class="toolbar"><span class="chip" id="adbChip">—</span></span></h2>
+        <div id="adbBody"><div class="empty">no adb block in snapshot</div></div>
+      </div>
+
+      <div class="card">
+        <h2>COM ports <span class="toolbar"><span class="chip grey" id="comCount">0</span></span></h2>
+        <div id="comBody"><div class="empty">no COM ports</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Raw snapshot</h2>
+        <details id="rawWrap">
+          <summary>state.json <span class="note" id="rawNote">last payload</span></summary>
+          <pre id="rawJson">waiting…</pre>
+        </details>
+        <details style="margin-top:10px">
+          <summary>history tail <span class="note" id="histNote">history.jsonl</span></summary>
+          <pre id="rawHist">waiting…</pre>
+        </details>
+        <details style="margin-top:10px">
+          <summary>server meta <span class="note">/api/state _meta</span></summary>
+          <pre id="rawMeta">waiting…</pre>
+        </details>
+        <details style="margin-top:10px">
+          <summary>iphone.json <span class="note" id="rawIphoneNote">/api/iphone payload</span></summary>
+          <pre id="rawIphone">waiting…</pre>
+        </details>
+        <div class="note-line" id="srcLine">source: —</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------ *
+ * PhoneWatch dashboard client.
+ * Defensive by construction: every read goes through helpers that
+ * tolerate missing objects/keys/odd types, and nothing throws upward
+ * (a render error is caught and shown, never a blank page).
+ * ------------------------------------------------------------------ */
+
+var POLL_MS = 2000;
+var STALE_MS = 10000;              // Samsung: stale if no fresh payload in 10s
+var IPHONE_STALE_MS = 15000;       // iPhone writer beats every 4s; 15s is stale
+var API = "/api/state";
+var API_IPHONE = "/api/iphone";
+
+/* ---------------- safe accessors ---------------- */
+function isObj(v){ return v !== null && typeof v === "object" && !Array.isArray(v); }
+function g(o, path, dflt){
+  var cur = o, parts = String(path).split("."), i, k;
+  for (i = 0; i < parts.length; i++){
+    k = parts[i];
+    if (isObj(cur) && Object.prototype.hasOwnProperty.call(cur, k) && cur[k] !== null && cur[k] !== undefined){
+      cur = cur[k];
+    } else { return dflt; }
+  }
+  return cur === undefined || cur === null ? dflt : cur;
+}
+function s(v, dflt){                       // string or em-dash
+  if (v === null || v === undefined) return dflt === undefined ? "\u2014" : dflt;
+  if (typeof v === "string"){ var t = v.trim(); return t === "" ? (dflt === undefined ? "\u2014" : dflt) : t; }
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return v.length ? v.map(function(x){return s(x);}).join(", ") : (dflt === undefined ? "\u2014" : dflt);
+  if (isObj(v)){ try { return JSON.stringify(v); } catch(e){ return "[object]"; } }
+  return String(v);
+}
+function num(v){ var n = typeof v === "number" ? v : parseFloat(v); return isFinite(n) ? n : null; }
+function arr(v){ return Array.isArray(v) ? v : []; }
+function esc(t){
+  return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+                  .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function el(id){ return document.getElementById(id); }
+function setText(id, t){ var e = el(id); if (e) e.textContent = (t === null || t === undefined) ? "\u2014" : String(t); }
+function setHTML(id, h){ var e = el(id); if (e) e.innerHTML = h; }
+function show(id, on){ var e = el(id); if (e) e.classList.toggle("hidden", !on); } // classList.toggle(name, force) => boolean
+function fmtDur(ms){
+  if (ms === null || ms === undefined || !isFinite(ms) || ms < 0) return "\u2014";
+  var sec = ms / 1000;
+  if (sec < 1) return Math.round(ms) + " ms";
+  if (sec < 60) return sec.toFixed(sec < 10 ? 1 : 0) + "s";
+  var m = Math.floor(sec / 60), r = Math.round(sec % 60);
+  if (m < 60) return m + "m " + r + "s";
+  var h = Math.floor(m / 60); return h + "h " + (m % 60) + "m";
+}
+function fmtAge(sec){
+  if (sec === null || sec === undefined || !isFinite(sec)) return "\u2014";
+  if (sec < 1) return "just now";
+  if (sec < 60) return sec.toFixed(sec < 10 ? 1 : 0) + "s ago";
+  return Math.floor(sec / 60) + "m " + Math.round(sec % 60) + "s ago";
+}
+function clock(iso){
+  if (!iso) return "\u2014";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return s(iso);
+  return d.toLocaleTimeString([], {hour12:false}) ;
+}
+function clockMs(iso){
+  if (!iso) return "\u2014";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return s(iso);
+  return d.toLocaleTimeString([], {hour12:false}) + "." + String(d.getMilliseconds()).padStart(3,"0");
+}
+function msOf(iso){ if(!iso) return null; var d = new Date(iso); return isNaN(d.getTime()) ? null : d.getTime(); }
+
+/* ---------------- mode model ---------------- */
+var MODES = {
+  descriptor_failed: { cls:"bad",    glyph:"\u26A0", title:"DESCRIPTOR FAILED",
+    note:"USB enumeration failed - Windows saw the device but could not read its descriptors. No usable interface." },
+  download:          { cls:"info",   glyph:"\u2B07", title:"DOWNLOAD MODE",
+    note:"Odin/download-mode interface is exposed. Flash tooling can talk to it." },
+  mtp:               { cls:"ok",     glyph:"\u25A3", title:"MTP",
+    note:"Phone booted normally and is exposing Media Transfer Protocol." },
+  adb:               { cls:"ok",     glyph:"\u2318", title:"ADB",
+    note:"USB debugging interface is up; adb can reach the device." },
+  absent:            { cls:"grey",   glyph:"\u2715", title:"ABSENT",
+    note:"No matching USB device present. The phone has disappeared from the bus." },
+  unknown:           { cls:"grey",   glyph:"?",      title:"UNKNOWN",
+    note:"Snapshot did not report a recognisable mode." }
+};
+function modeInfo(m){
+  var key = String(m === null || m === undefined ? "" : m).toLowerCase().trim();
+  if (!key) return { key:"", info:{cls:"grey",glyph:"\u2014",title:"\u2014",note:"no mode reported"} };
+  return { key:key, info: MODES[key] || { cls:"purple", glyph:"?", title:key.toUpperCase(),
+    note:"unrecognised mode value reported by the snapshot" } };
+}
+
+/* ---------------- handle-holder detection ---------------- */
+var HOLDERS = [
+  ["zadig",    /zadig/i],
+  ["brokkr",   /brokkr/i],
+  ["adb",      /(^|[\\\/_\-.\s])adb(\.exe)?$/i],
+  ["heimdall", /heimdall/i],
+  ["odin",     /odin/i]
+];
+function holderOf(name){
+  var n = String(name === null || name === undefined ? "" : name);
+  for (var i = 0; i < HOLDERS.length; i++){ if (HOLDERS[i][1].test(n)) return HOLDERS[i][0]; }
+  return null;
+}
+
+/* ---------------- state ---------------- */
+var lastPayload = null;
+var lastSuccess = 0;
+var lastSeq = null;
+var lastMode = null;
+var latency = [];
+var failCount = 0;
+var lastError = null;
+
+/* ---------------- iPhone: mode model ---------------- */
+/* Four states the card must distinguish, per the spec:
+     no device / Apple peripheral only / iPhone seen but not queryable / queryable */
+var IPHONE_STATES = {
+  queryable:       { cls:"ok",   glyph:"\u2713", title:"QUERYABLE",
+    note:"iPhone is booted, unlocked and trusted - full device details are readable." },
+  not_queryable:   { cls:"warn", glyph:"\u26A0", title:"DETECTED, NOT QUERYABLE",
+    note:"An iPhone is on the bus but the device service refused a query. Usually locked or not trusted yet - unlock it and tap Trust." },
+  peripheral_only: { cls:"warn", glyph:"\u2328", title:"APPLE PERIPHERAL ONLY",
+    note:"Apple USB devices are attached but they are HID peripherals (keyboard/mouse/trackpad) - NOT an iPhone." },
+  usb_activity:    { cls:"info", glyph:"\u25CB", title:"USB ACTIVITY, NO iPHONE",
+    note:"Something Apple-ish is on the USB bus but no iPhone and no recognisable peripheral." },
+  no_device:       { cls:"grey", glyph:"\u2715", title:"NO APPLE DEVICE",
+    note:"No Apple USB device is attached. Nothing to query." },
+  no_data:         { cls:"grey", glyph:"\u2014", title:"NO DATA",
+    note:"iphone.json has not been written (or is unreadable) - the iPhone monitor may not be running." },
+  unknown:         { cls:"purple", glyph:"?", title:"UNKNOWN",
+    note:"Unrecognised iPhone status value." }
+};
+function iphoneInfo(st){
+  var key = String(st === null || st === undefined ? "" : st).toLowerCase().trim();
+  if (!key) return { key:"no_data", info: IPHONE_STATES.no_data };
+  return { key:key, info: IPHONE_STATES[key] || { cls:"purple", glyph:"?", title:key.toUpperCase(),
+    note:"unrecognised status value reported by /api/iphone" } };
+}
+var lastIphonePayload = null;
+var ipOkAt = 0;
+var ipLastError = null;
+var ipSeenAt = {};                 // pid -> timestamp of last sighting, to spot disappearing devices
+
+/* ---------------- fetch ---------------- */
+function poll(){
+  var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  var to = setTimeout(function(){ if (ctl) ctl.abort(); }, 8000);
+  fetch(API + "?_=" + Date.now(), {cache:"no-store", signal: ctl ? ctl.signal : undefined})
+    .then(function(r){
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(function(j){
+      clearTimeout(to);
+      lastPayload = j; lastSuccess = Date.now(); failCount = 0; lastError = null;
+      try { render(j); }
+      catch(e){
+        lastError = "render error: " + e.message;
+        console.error(e);
+      }
+      paintConnection();
+    })
+    .catch(function(e){
+      clearTimeout(to);
+      failCount++;
+      lastError = (e && e.name === "AbortError") ? "request timed out" : (e && e.message ? e.message : String(e));
+      paintConnection();
+    });
+}
+
+/* ---------------- fetch (iPhone) ---------------- *
+ * Polled on the same 2s cadence as /api/state, rendered in place. Failure here
+ * never touches the Samsung card's state. */
+function pollIphone(){
+  var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  var to = setTimeout(function(){ if (ctl) ctl.abort(); }, 8000);
+  fetch(API_IPHONE + "?_=" + Date.now(), {cache:"no-store", signal: ctl ? ctl.signal : undefined})
+    .then(function(r){
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(function(j){
+      clearTimeout(to);
+      lastIphonePayload = isObj(j) ? j : {};
+      ipOkAt = Date.now(); ipLastError = null;
+      try { renderIphone(lastIphonePayload); }
+      catch(e){ ipLastError = "render error: " + e.message; console.error(e); }
+      paintConnection();
+    })
+    .catch(function(e){
+      clearTimeout(to);
+      ipLastError = (e && e.name === "AbortError") ? "request timed out" : (e && e.message ? e.message : String(e));
+      paintConnection();
+    });
+}
+
+function paintConnection(){
+  var age = lastSuccess ? (Date.now() - lastSuccess) : Infinity;
+  var pill = el("updpill");
+  var txt = el("updtxt");
+  var stale = age > STALE_MS;
+  if (pill) pill.classList.toggle("stale", stale);
+  if (txt){
+    txt.textContent = lastSuccess
+      ? ("last update " + fmtAge(age / 1000) + (stale ? " \u2014 STALE" : " \u2014 live"))
+      : "no response yet";
+  }
+  var conn = el("conn");
+  if (conn){
+    conn.textContent = "http://127.0.0.1" + (location.port ? ":" + location.port : "") +
+      "  \u00B7  poll " + (POLL_MS/1000) + "s" +
+      (lastError ? "  \u00B7  last error: " + lastError : "");
+  }
+  var staleBanner = stale;
+  show("bnStale", staleBanner);
+  if (staleBanner){
+    var d = el("bnStaleD");
+    if (d){
+      d.textContent = lastSuccess
+        ? ("Last successful poll was " + fmtAge(age/1000) + " ago (threshold " + (STALE_MS/1000) +
+           "s). Either phonewatch has stopped writing state.json, the writer is blocked, or the server is wedged." +
+           (failCount ? "  Consecutive failed polls: " + failCount + " (" + (lastError||"") + ")" : ""))
+        : ("No successful poll yet" + (lastError ? " (" + lastError + ")" : "") +
+           ". The dashboard server may not be running, or /api/state is failing.");
+    }
+  }
+
+  /* iPhone has its OWN stale indicator, independent of the Samsung feed's. */
+  var ipAge = ipOkAt ? (Date.now() - ipOkAt) : Infinity;
+  var ipStale = ipAge > IPHONE_STALE_MS;
+  var ipFresh = el("ipFresh");
+  if (ipFresh){
+    ipFresh.className = "chip " + (!ipOkAt ? "grey" : (ipStale ? "bad" : "ok"));
+    ipFresh.textContent = !ipOkAt
+      ? ("feed \u2014" + (ipLastError ? " (" + ipLastError + ")" : ""))
+      : ("feed " + fmtAge(ipAge/1000) + (ipStale ? " \u2014 STALE" : " \u2014 live"));
+  }
+  if (ipStale){
+    var ipc = lastIphonePayload;
+    var fileAge = num(g(g(ipc, "_meta", {}), "iphone_file.age_seconds", null));
+    var ipAgeEl = el("ipAge");
+    if (ipAgeEl && ipOkAt){
+      ipAgeEl.textContent = fmtAge(ipAge/1000) + " (stale poll)" +
+        (fileAge !== null ? " \u00B7 file " + fmtAge(fileAge) : "");
+    }
+  }
+  // stale the snapshot-age row too
+  if (lastPayload && age > STALE_MS){ setText("kAge", fmtAge(age/1000) + " (stale)"); }
+}
+
+/* ---------------- render ---------------- */
+function render(p){
+  if (!isObj(p)){ p = {}; }
+  var meta = g(p, "_meta", {});
+  var dev = g(p, "device", {});
+  if (!isObj(dev)) dev = {};
+  var modeRaw = g(dev, "mode", null);
+  if (modeRaw === null) modeRaw = g(p, "mode", null);
+  var mi = modeInfo(modeRaw);
+  var info = mi.info;
+
+  var present = g(dev, "present", null);
+  if (present === null && modeRaw !== null){
+    var mk = String(modeRaw).toLowerCase();
+    if (mk === "absent") present = false;
+    else if (mk === "descriptor_failed" || mk === "download" || mk === "mtp" || mk === "adb") present = true;
+  }
+  var st = g(meta, "state_file", {});
+  var stateExists = g(st, "exists", null);
+
+  /* --- connection / sequence --- */
+  setText("seqpill", "seq " + s(g(p, "seq", null)));
+  var seq = num(g(p, "seq", null));
+  if (seq !== null && lastSeq !== null && seq !== lastSeq){ /* new snapshot */ }
+  if (seq !== null) lastSeq = seq;
+
+  /* --- "no data yet" banner --- */
+  var noData = (stateExists === false) || (Object.keys(p).filter(function(k){return k !== "_meta" && k !== "history";}).length === 0);
+  show("bnNoData", noData);
+  if (noData){
+    var d = el("bnNoDataD");
+    if (d){
+      d.textContent = "Nothing has been published yet at " + s(g(st, "path", "state.json")) +
+        (g(st, "error", null) ? "  (reader said: " + g(st,"error","") + ")" : "") +
+        ". This page will populate itself within " + (POLL_MS/1000) + "s of the first write.";
+    }
+  }
+
+  /* --- phone card --- */
+  var phone = el("phoneCard");
+  if (phone){
+    phone.className = "card phone" + (mi.key ? " mode-" + mi.key : "");
+  }
+  var mb = el("modeBig");
+  if (mb) mb.className = "modebig " + info.cls;
+  setText("modeGlyph", info.glyph);
+  setText("modeTitle", info.title);
+  setText("modeNote", info.note);
+  setText("modeSeen", g(meta,"state_file",{}).exists === false ? "no snapshot file" :
+                      ("age " + fmtAge(num(g(st,"age_seconds",null)))));
+
+  setText("kName",     s(g(dev,"friendly_name",null)));
+  setText("kStatus",   s(g(dev,"status",null)));
+  setText("kService",  s(g(dev,"service",null)));
+  setText("kDriver",   s(g(dev,"driver_provider",null)));
+  setText("kInstance", s(g(dev,"instance_id",null)));
+  var pc = g(dev,"problem_code",null);
+  setText("kProblem",  pc === null || pc === undefined ? "\u2014" : (String(pc) === "0" ? "0 (ok)" : String(pc)));
+  var ageS = num(g(st,"age_seconds",null));
+  setText("kAge", g(st,"exists",null) === false ? "no file" : fmtAge(ageS));
+
+  var pres = el("devPresence");
+  if (pres){
+    if (present === true){ pres.className = "chip ok"; pres.textContent = "present"; }
+    else if (present === false){ pres.className = "chip bad"; pres.textContent = "absent"; }
+    else { pres.className = "chip grey"; pres.textContent = "presence \u2014"; }
+  }
+
+  /* --- failure banner --- */
+  var isFail = mi.key === "descriptor_failed";
+  show("bnFail", isFail);
+  if (isFail){
+    var fd = el("bnFailD");
+    if (fd){
+      var bits = ["Windows enumerated the device but the USB descriptor read failed, so no interface is usable."];
+      if (g(dev,"instance_id",null)) bits.push("instance " + s(g(dev,"instance_id")));
+      if (g(dev,"problem_code",null) !== null) bits.push("problem code " + s(g(dev,"problem_code")));
+      if (g(dev,"driver_provider",null)) bits.push("driver " + s(g(dev,"driver_provider")));
+      bits.push("current state (this snapshot).");
+      fd.textContent = bits.join("  \u00B7  ");
+    }
+  }
+
+  /* --- handle-holder banner + process table --- */
+  renderProcesses(p);
+
+  /* --- ADB --- */
+  renderAdb(p);
+
+  /* --- LAN --- */
+  renderLan(p);
+
+  /* --- COM ports --- */
+  renderCom(p);
+
+  /* --- timeline --- */
+  renderTimeline(p);
+
+  /* --- combined summary (needs both feeds) --- */
+  renderBoth(p);
+
+  /* --- iPhone card (re-render if the iPhone poll already landed) --- */
+  if (lastIphonePayload) {
+    try { renderIphone(lastIphonePayload); } catch(e){ ipLastError = "render error: " + e.message; }
+  }
+
+  /* --- raw views --- */
+  var rawTxt = "";
+  try { rawTxt = JSON.stringify(p, null, 2); } catch(e){ rawTxt = "unserializable payload: " + e.message; }
+  setText("rawJson", rawTxt);
+  setText("rawMeta", (function(){ try { return JSON.stringify(meta, null, 2); } catch(e){ return "—"; } })());
+  setText("srcLine", "source: " + s(g(st,"path","\u2014")) +
+    (g(st,"mtime_iso",null) ? "  \u00B7  mtime " + s(g(st,"mtime_iso")) : "") +
+    (g(st,"error",null) ? "  \u00B7  reader note: " + g(st,"error","") : "") +
+    "  \u00B7  server pid " + s(g(meta,"server_pid","\u2014")) +
+    "  \u00B7  uptime " + fmtDur((num(g(meta,"uptime_seconds",0)) || 0) * 1000));
+  var rn = el("rawNote");
+  if (rn) rn.textContent = (rawTxt.length/1024).toFixed(1) + " KB \u00B7 " + new Date().toLocaleTimeString([], {hour12:false});
+}
+
+/* ---------------- iPhone card ---------------- *
+ * Renders /api/iphone. The backend has already deduplicated usb.devices by
+ * (VID,PID) into usb.devices[] with an "interfaces" count, so one physical
+ * Apple device is exactly one row here. */
+function iphoneStatusOf(ip){
+  var st = g(ip, "status", null);
+  if (st !== null && st !== undefined && String(st) !== "") return String(st);
+  // defensive fallback if an older/foreign server omits the derived status
+  var dev = g(ip, "device", null);
+  if (isObj(dev) && g(dev, "available", null) === true) return "queryable";
+  if (isObj(dev)) return "not_queryable";
+  if (arr(g(ip, "usbmux_ids", [])).length) return "not_queryable";
+  if (arr(g(ip, "usb.devices", [])).length) return "peripheral_only";
+  if (g(ip, "usb.present", null) === true) return "usb_activity";
+  return "no_device";
+}
+
+function renderIphone(ip){
+  if (!isObj(ip)) ip = {};
+  var meta = g(ip, "_meta", {}); if (!isObj(meta)) meta = {};
+  var usb  = g(ip, "usb", {});   if (!isObj(usb)) usb = {};
+  var dev  = g(ip, "device", null); if (!isObj(dev)) dev = null;
+  var fileObj = g(meta, "iphone_file", {}); if (!isObj(fileObj)) fileObj = {};
+
+  var stKey = iphoneStatusOf(ip);
+  var si = iphoneInfo(stKey);
+  var info = si.info;
+
+  var iphoneStale = g(meta, "stale", null) === true;
+  if (g(fileObj, "exists", null) === false) iphoneStale = true;
+  var ageS = num(g(fileObj, "age_seconds", null));
+  var errStr = g(fileObj, "error", null);
+
+  /* --- card class reflects the phone state --- */
+  var card = el("iphoneCard");
+  if (card) card.className = "card iphone mode-iq-" + si.key;
+
+  /* --- the big state block --- */
+  var mb = el("ipModeBig");
+  if (mb) mb.className = "modebig " + info.cls;
+  setText("ipModeGlyph", info.glyph);
+  setText("ipModeTitle", info.title);
+  setText("ipModeNote", info.note);
+  setText("ipModeSeen", g(fileObj, "exists", null) === false
+    ? "no iphone.json"
+    : ("age " + fmtAge(ageS) + (iphoneStale ? " \u00b7 STALE" : "")));
+
+  /* --- presence chip: is an Apple device physically there? --- */
+  var present = g(usb, "present", null);
+  var likely = g(usb, "likely_iphone", null);
+  var pres = el("ipPresence");
+  if (pres){
+    if (stKey === "queryable"){ pres.className = "chip ok"; pres.textContent = "iPhone present"; }
+    else if (stKey === "not_queryable"){ pres.className = "chip warn"; pres.textContent = "iPhone present"; }
+    else if (stKey === "peripheral_only"){ pres.className = "chip warn"; pres.textContent = "peripheral only"; }
+    else if (present === true){ pres.className = "chip info"; pres.textContent = "USB device present"; }
+    else if (present === false){ pres.className = "chip grey"; pres.textContent = "absent"; }
+    else { pres.className = "chip grey"; pres.textContent = "presence \u2014"; }
+  }
+
+  /* --- warnings, rendered prominently --- */
+  var warns = arr(g(ip, "warnings", []));
+  var notes = arr(g(ip, "notes", []));
+  var all = warns.concat(notes);
+  var wbox = el("ipWarn");
+  if (wbox){
+    if (!all.length){
+      wbox.innerHTML = "";
+    } else {
+      var bad = (stKey === "not_queryable") || (stKey === "no_data");
+      var lis = "";
+      for (var i = 0; i < all.length; i++) lis += "<li>" + esc(s(all[i])) + "</li>";
+      wbox.innerHTML = '<div class="warnbox' + (bad ? " bad" : "") + '">' +
+        '<div class="wh">' + (bad ? "\u26A0 " : "") + all.length +
+        (all.length === 1 ? " warning / note" : " warnings / notes") + '</div>' +
+        '<ul>' + lis + '</ul></div>';
+    }
+  }
+
+  /* --- device detail rows --- */
+  setText("ipName",    dev ? s(g(dev, "name", null)) : "\u2014");
+  setText("ipProduct", dev ? s(g(dev, "product_type", null)) : "\u2014");
+  var ios = dev ? g(dev, "ios_version", null) : null;
+  setText("ipIos", dev ? s(ios) : "\u2014");
+  setText("ipBuild",   dev ? s(g(dev, "build", null)) : "\u2014");
+  setText("ipModel",   dev ? s(g(dev, "model", null)) : "\u2014");
+  setText("ipSerial",  dev ? s(g(dev, "serial", null)) : "\u2014");
+  setText("ipUdid",    dev ? s(g(dev, "udid", null)) : "\u2014");
+  var derr = dev ? g(dev, "error", null) : null;
+  var derrEl = el("ipDevErr");
+  if (derrEl){
+    derrEl.textContent = derr ? String(derr) : "\u2014";
+    derrEl.className = "v" + (derr ? " err" : "");
+  }
+
+  /* --- battery: bar + charging state --- */
+  var pct = dev ? num(g(dev, "battery_pct", null)) : null;
+  var charging = dev ? g(dev, "charging", null) : null;
+  var full = dev ? g(dev, "fully_charged", null) : null;
+  renderBattery(pct, charging, full);
+
+  /* --- usbmux --- */
+  var mux = arr(g(ip, "usbmux_ids", []));
+  var muxEl = el("ipMux");
+  if (muxEl){
+    if (mux.length){
+      muxEl.textContent = mux.length + " id(s): " + mux.map(function(m){
+        var t = s(m); return t.length > 18 ? t.slice(0, 16) + "\u2026" : t;
+      }).join(", ");
+    } else {
+      muxEl.textContent = "\u2014 (no usbmux device)";
+    }
+  }
+
+  /* --- USB note + raw counts --- */
+  setText("ipUsbNote", s(g(usb, "note", null)));
+  setText("ipAge", g(fileObj, "exists", null) === false
+    ? "no file"
+    : (fmtAge(ageS) + (iphoneStale ? " (stale)" : "") +
+       (errStr ? "  \u00b7 reader: " + errStr : "")));
+
+  /* --- deduplicated Apple USB device list --- */
+  renderIphoneDevices(ip, usb);
+
+  /* --- raw json viewer --- */
+  var rtxt;
+  try { rtxt = JSON.stringify(ip, null, 2); } catch(e){ rtxt = "unserializable payload: " + e.message; }
+  setText("rawIphone", rtxt);
+  var rin = el("rawIphoneNote");
+  if (rin){
+    rin.textContent = s(g(fileObj, "path", "/api/iphone")) + " \u00b7 " +
+      (rtxt.length/1024).toFixed(1) + " KB \u00b7 " +
+      new Date().toLocaleTimeString([], {hour12:false}) +
+      (iphoneStale ? " \u00b7 STALE" : "");
+  }
+}
+
+function renderBattery(pct, charging, full){
+  var shell = el("ipBattFill"), bar = el("ipBattBar"), txt = el("ipBattText");
+  var chgTxt = charging === true ? "charging" : (charging === false ? "on battery" : "charge state \u2014");
+  if (full === true) chgTxt += " \u00b7 fully charged";
+  if (pct === null || !isFinite(pct)){
+    if (shell){ shell.style.width = "0%"; shell.className = "fill"; }
+    if (bar) bar.setAttribute("title", "battery level not reported");
+    if (txt) txt.textContent = "\u2014" + (charging !== null && charging !== undefined ? "  \u00b7  " + chgTxt : "");
+    return;
+  }
+  var v = Math.max(0, Math.min(100, pct));
+  if (shell){
+    shell.style.width = v + "%";
+    shell.className = "fill" + (v < 20 ? " low" : (v < 50 ? " mid" : ""));
+  }
+  if (bar) bar.setAttribute("title", v + "% \u00b7 " + chgTxt);
+  if (txt) txt.textContent = v + "%  \u00b7  " + chgTxt;
+}
+
+function renderIphoneDevices(ip, usb){
+  var groups = arr(g(ip, "usb.devices", []));
+  var rawCount = num(g(usb, "device_count", null));
+  var periph = arr(g(usb, "peripherals", []));
+
+  setText("ipDevCount", groups.length + (groups.length === 1 ? " device" : " devices"));
+
+  var html;
+  if (!groups.length){
+    html = '<div class="empty">no Apple USB devices reported' +
+      (g(usb, "present", null) === false ? " (usb.present = false)" : "") + '</div>';
+  } else {
+    html = '<table><thead><tr><th>PID</th><th>Class</th><th>Friendly name</th><th>Ifs</th></tr></thead><tbody>';
+    var now = Date.now();
+    for (var i = 0; i < groups.length; i++){
+      var grp = groups[i];
+      if (!isObj(grp)) continue;
+      var pid = g(grp, "pid", null);
+      var pidTxt = pid ? ("PID " + String(pid).toUpperCase()) : "no PID";
+      var vid = g(grp, "vid", null);
+      if (vid) pidTxt += "  (VID " + String(vid).toUpperCase() + ")";
+      var classes = arr(g(grp, "classes", []));
+      var ifs = num(g(grp, "interfaces", null));
+      var statuses = arr(g(grp, "statuses", []));
+      var isPeripheral = g(grp, "peripheral", null) === true;
+      var isHint = g(grp, "iphone_hint", null) === true;
+
+      // note when a device we saw last poll has vanished from the list
+      var key = s(g(grp, "vid_pid", null));
+      var seenBefore = Object.prototype.hasOwnProperty.call(ipSeenAt, key);
+      var gone = seenBefore && (now - ipSeenAt[key] > IPHONE_STALE_MS);
+      ipSeenAt[key] = now;
+
+      var bad = false, chips = [];
+      for (var k = 0; k < statuses.length; k++){
+        var sv = String(statuses[k]);
+        if (sv.toLowerCase() !== "ok"){ chips.push('<span class="chip bad">' + esc(sv) + '</span>'); bad = true; }
+      }
+      if (isPeripheral){
+        chips.unshift('<span class="chip warn">\u2328 peripheral \u2014 NOT a phone</span>');
+      } else if (isHint){
+        chips.unshift('<span class="chip ok">iPhone</span>');
+      } else if (vid && String(vid).toLowerCase() === "05ac"){
+        chips.unshift('<span class="chip grey">Apple</span>');
+      }
+      if (gone) chips.push('<span class="chip bad">disappeared</span>');
+      if (iphoneStaleChip(g(ip, "_meta", {}))) chips.push('<span class="chip warn">stale snapshot</span>');
+
+      html += '<tr class="' + (bad ? "badrow" : (isPeripheral ? "warnrow" : "")) + '">' +
+        '<td>' + esc(pidTxt) + '</td>' +
+        '<td>' + esc(classes.length ? classes.join(", ") : "\u2014") + '</td>' +
+        '<td class="wide">' + esc(s(g(grp, "friendly_name", null))) +
+          (chips.length ? '<div class="chiprow" style="margin-top:4px">' + chips.join("") + '</div>' : '') +
+        '</td>' +
+        '<td>' + (ifs === null ? "\u2014" : String(ifs)) + '</td></tr>';
+    }
+    html += '</tbody></table>';
+  }
+  setHTML("ipDevices", html);
+
+  var note = "";
+  if (rawCount !== null && groups.length){
+    note = "deduplicated by PID: " + rawCount + " raw usb.device entr" + (rawCount === 1 ? "y" : "ies") +
+           " \u2192 " + groups.length + " physical device" + (groups.length === 1 ? "" : "s") + ".";
+  }
+  if (periph.length){
+    note += " " + periph.length + " of them " + (periph.length === 1 ? "is an Apple HID peripheral, not a phone." : "are Apple HID peripherals, not phones.");
+  }
+  setText("ipDedupNote", note);
+}
+function iphoneStaleChip(meta){
+  return isObj(meta) && g(meta, "stale", null) === true;
+}
+
+/* ---------------- combined summary ---------------- */
+function renderBoth(p){
+  var meta = g(p, "_meta", {}); if (!isObj(meta)) meta = {};
+  var st = g(meta, "state_file", {}); if (!isObj(st)) st = {};
+  var ipFile = g(meta, "iphone_file", {}); if (!isObj(ipFile)) ipFile = {};
+
+  var sdev = g(p, "device", {}); if (!isObj(sdev)) sdev = {};
+  var smodeRaw = g(sdev, "mode", null);
+  if (smodeRaw === null) smodeRaw = g(p, "mode", null);   // real state.json puts mode at the top level
+  var spresent = g(sdev, "present", null);
+  if (spresent === null) spresent = g(p, "phone_present", null);
+  var smi = modeInfo(smodeRaw);
+  var sStale = g(meta, "stale", null) === true || g(st, "exists", null) === false;
+
+  var sEl = el("bothSamsung");
+  if (sEl){
+    var sPres = spresent === true ? "present" : (spresent === false ? "absent" : "presence \u2014");
+    sEl.className = "bv " + (g(st, "exists", null) === false ? "warn" : (sStale ? "warn" : (spresent === false ? "" : "ok")));
+    sEl.textContent = (g(st, "exists", null) === false)
+      ? "no state.json yet"
+      : (smi.info.title + (smi.key ? " (" + smi.key + ")" : "") + " \u00b7 " + sPres + " \u00b7 " + fmtAge(num(g(st, "age_seconds", null))));
+  }
+
+  var ip = lastIphonePayload;
+  var iEl = el("bothIphone");
+  if (iEl){
+    if (!ip){
+      iEl.className = "bv";
+      iEl.textContent = "waiting for /api/iphone\u2026";
+    } else {
+      var stKey = iphoneStatusOf(ip);
+      var ii = iphoneInfo(stKey).info;
+      var ipMeta2 = g(ip, "_meta", {}); if (!isObj(ipMeta2)) ipMeta2 = {};
+      var ipFile2 = g(ipMeta2, "iphone_file", {}); if (!isObj(ipFile2)) ipFile2 = {};
+      var iStale = g(ipMeta2, "stale", null) === true || g(ipFile2, "exists", null) === false;
+      var d = g(ip, "device", null);
+      var extra = (isObj(d) && g(d, "product_type", null)) ? " \u00b7 " + s(g(d, "product_type", null)) : "";
+      var bat = (isObj(d) && num(g(d, "battery_pct", null)) !== null) ? " \u00b7 batt " + num(g(d, "battery_pct", null)) + "%" : "";
+      iEl.className = "bv " + (iStale ? "warn" : (stKey === "queryable" ? "ok" : (g(ipFile2, "exists", null) === false ? "bad" : "")));
+      iEl.textContent = ii.title + extra + bat + " \u00b7 " + fmtAge(num(g(ipFile2, "age_seconds", null))) +
+        (iStale ? " \u00b7 STALE" : "");
+    }
+  }
+
+  setText("bothSamsungAge", g(st, "exists", null) === false
+    ? "missing"
+    : (fmtAge(num(g(st, "age_seconds", null))) + (g(meta, "stale", null) === true ? " \u00b7 STALE" : " \u00b7 ok")));
+
+  /* The iPhone's own freshness comes from /api/iphone (the feed the iPhone card
+     renders). /api/state also carries a copy in _meta.iphone_file as a fallback
+     for the very first paint, before the iPhone poll has landed. */
+  var ipMeta = lastIphonePayload ? g(lastIphonePayload, "_meta", {}) : {};
+  if (!isObj(ipMeta)) ipMeta = {};
+  var ipFileLive = g(ipMeta, "iphone_file", null);
+  if (!isObj(ipFileLive)) ipFileLive = ipFile;
+  var ipStaleLive = g(ipMeta, "stale", null) === true || (!lastIphonePayload && g(meta, "iphone_stale", null) === true);
+  var ipNoFile = g(ipFileLive, "exists", null) === false;
+  setText("bothIphoneAge", ipNoFile
+    ? "missing"
+    : (fmtAge(num(g(ipFileLive, "age_seconds", null))) + (ipStaleLive ? " \u00b7 STALE" : " \u00b7 ok")));
+
+  var chip = el("bothChip");
+  if (chip){
+    var samsungBad = (g(st, "exists", null) === false) || g(meta, "stale", null) === true;
+    var iphoneBad = (g(ipFileLive, "exists", null) === false) || ipStaleLive;
+    if (samsungBad && iphoneBad){ chip.className = "chip bad"; chip.textContent = "both feeds stale"; }
+    else if (samsungBad){ chip.className = "chip warn"; chip.textContent = "Samsung feed stale"; }
+    else if (iphoneBad){ chip.className = "chip warn"; chip.textContent = "iPhone feed stale"; }
+    else { chip.className = "chip ok"; chip.textContent = "both feeds live"; }
+  }
+}
+
+/* ---------------- processes ---------------- */
+function renderProcesses(p){
+  var list = arr(g(p, "processes", []));
+  if (!list.length) list = arr(g(p, "handle_holders", []));
+  var rows = [], holders = [];
+  for (var i = 0; i < list.length; i++){
+    var it = list[i];
+    var nm = isObj(it) ? s(g(it,"name",null)) : s(it);
+    var pid = isObj(it) ? s(g(it,"pid",null)) : "\u2014";
+    var h = holderOf(nm);
+    if (h) holders.push(nm + (pid !== "\u2014" ? " (pid " + pid + ")" : ""));
+    rows.push({name:nm, pid:pid, h:h});
+  }
+  setText("procCount", rows.length + (rows.length === 1 ? " process" : " processes"));
+  var html;
+  if (!rows.length){
+    html = '<div class="empty">no process list in snapshot \u2014 nothing interesting is holding the device.</div>';
+  } else {
+    html = '<table><thead><tr><th>Process</th><th>PID</th><th>Class</th></tr></thead><tbody>';
+    for (var j = 0; j < rows.length; j++){
+      var r = rows[j];
+      html += '<tr class="' + (r.h ? "warnrow" : "") + '"><td class="wide">' + esc(r.name) + '</td><td>' +
+              esc(r.pid) + '</td><td>' +
+              (r.h ? '<span class="chip warn">' + esc(r.h) + ' \u2014 handle holder</span>'
+                   : '<span class="chip grey">other</span>') +
+              '</td></tr>';
+    }
+    html += '</tbody></table>';
+  }
+  setHTML("procBody", html);
+
+  show("bnProc", holders.length > 0);
+  if (holders.length){
+    var db = el("bnProcD");
+    if (db) db.textContent = holders.join("  \u00B7  ") +
+      ".  These processes commonly grab the Samsung USB interface. Close them before re-plugging or re-enumerating.";
+  }
+}
+
+/* ---------------- adb ---------------- */
+function renderAdb(p){
+  var adb = g(p, "adb", null);
+  if (!isObj(adb)) adb = {};
+  var enabled = g(adb, "enabled", null);
+  if (enabled === null) enabled = g(p, "adb_enabled", null);
+  var devs = arr(g(adb, "devices", []));
+  if (!devs.length) devs = arr(g(p, "adb_devices", []));
+
+  var chip = el("adbChip");
+  if (chip){
+    if (enabled === true){ chip.className = "chip ok"; chip.textContent = "enabled"; }
+    else if (enabled === false){ chip.className = "chip grey"; chip.textContent = "disabled"; }
+    else { chip.className = "chip grey"; chip.textContent = "not reported"; }
+  }
+
+  var html = '<div class="kv"><div class="k">Enabled</div><div class="v">' +
+    esc(enabled === null ? "\u2014" : String(enabled)) + '</div>' +
+    '<div class="k">Devices</div><div class="v">' + devs.length + '</div></div>';
+
+  if (devs.length){
+    html += '<table style="margin-top:8px"><thead><tr><th>#</th><th>Device</th></tr></thead><tbody>';
+    for (var i = 0; i < devs.length; i++){
+      var d = devs[i];
+      var t = isObj(d) ? (g(d,"serial",null) || g(d,"id",null) || g(d,"name",null) || JSON.stringify(d)) : d;
+      var extra = isObj(d) && g(d,"state",null) ? ' <span class="chip info">' + esc(s(g(d,"state"))) + '</span>' : '';
+      html += '<tr><td>' + (i+1) + '</td><td>' + esc(s(t)) + extra + '</td></tr>';
+    }
+    html += '</tbody></table>';
+  } else {
+    html += '<div class="empty">no adb devices reported' +
+            (enabled === false ? ' (adb disabled)' : '') + '</div>';
+  }
+  var raw = g(adb, "raw", null);
+  if (raw !== null && raw !== undefined){
+    var rt = typeof raw === "string" ? raw : (function(){ try { return JSON.stringify(raw, null, 2); } catch(e){ return "—"; } })();
+    html += '<details style="margin-top:10px"><summary>raw adb output</summary><pre>' + esc(rt) + '</pre></details>';
+  }
+  setHTML("adbBody", html);
+
+  // info banner only when adb is actually running with devices (a real handle risk)
+  var showAdb = (enabled === true) || devs.length > 0;
+  show("bnAdb", showAdb && !showAdbNoise(devs, enabled));
+  if (showAdb && !showAdbNoise(devs, enabled)){
+    var da = el("bnAdbD");
+    if (da) da.textContent = "adb reports " + devs.length + " device(s) and holds a handle while it runs. " +
+      "Stop the adb server before re-plugging the phone into download mode.";
+  }
+}
+function showAdbNoise(devs, enabled){ return false; }
+
+/* ---------------- LAN ---------------- */
+function renderLan(p){
+  var lan = g(p, "lan", null);
+  if (!isObj(lan)) lan = {};
+  var reach = g(lan, "reachable", null);
+  if (reach === null) reach = g(p, "lan_reachable", null);
+  var lat = num(g(lan, "latency_ms", null));
+  if (lat === null) lat = num(g(p, "lan_latency_ms", null));
+
+  var rv = el("lanReach");
+  if (rv){
+    if (reach === true){ rv.innerHTML = '<span class="chip ok">reachable</span>'; }
+    else if (reach === false){ rv.innerHTML = '<span class="chip bad">unreachable</span>'; }
+    else { rv.textContent = "\u2014"; }
+  }
+  setText("lanLat", lat === null ? "\u2014" : (lat.toFixed(1) + " ms"));
+
+  if (lat !== null && isFinite(lat)){
+    latency.push(lat);
+    if (latency.length > 60) latency.shift();
+  }
+  var vals = latency.filter(function(v){ return isFinite(v); });
+  setText("latSamples", vals.length + (vals.length === 1 ? " sample" : " samples"));
+  setText("latMin", "min " + (vals.length ? Math.min.apply(null, vals).toFixed(1) + " ms" : "\u2014"));
+  setText("latMax", "max " + (vals.length ? Math.max.apply(null, vals).toFixed(1) + " ms" : "\u2014"));
+  drawSpark(vals);
+}
+function drawSpark(vals){
+  var c = el("latSpark");
+  if (!c || !c.getContext) return;
+  var ctx = c.getContext("2d");
+  var W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = "rgba(139,148,158,.18)"; ctx.lineWidth = 1;
+  for (var gy = 1; gy < 4; gy++){
+    ctx.beginPath(); ctx.moveTo(0, H*gy/4); ctx.lineTo(W, H*gy/4); ctx.stroke();
+  }
+  if (vals.length < 1){
+    ctx.fillStyle = "rgba(107,124,140,.9)"; ctx.font = "16px ui-monospace,Consolas,monospace";
+    ctx.fillText("no latency samples yet", 12, H/2 + 6);
+    return;
+  }
+  var maxV = Math.max.apply(null, vals), minV = Math.min.apply(null, vals);
+  var span = (maxV - minV) || (maxV || 1);
+  var pad = 6;
+  function X(i){ return vals.length === 1 ? W/2 : (i / (vals.length - 1)) * (W - 2) + 1; }
+  function Y(v){ return H - pad - ((v - minV) / span) * (H - 2*pad); }
+  // area
+  var grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,"rgba(88,166,255,.45)"); grad.addColorStop(1,"rgba(88,166,255,0)");
+  ctx.beginPath(); ctx.moveTo(X(0), H);
+  for (var i = 0; i < vals.length; i++) ctx.lineTo(X(i), Y(vals[i]));
+  ctx.lineTo(X(vals.length-1), H); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+  // line
+  ctx.beginPath();
+  for (var j = 0; j < vals.length; j++){ if (j===0) ctx.moveTo(X(j), Y(vals[j])); else ctx.lineTo(X(j), Y(vals[j])); }
+  ctx.strokeStyle = "#58a6ff"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  // last point
+  ctx.beginPath(); ctx.arc(X(vals.length-1), Y(vals[vals.length-1]), 3.2, 0, Math.PI*2);
+  ctx.fillStyle = "#e6edf3"; ctx.fill();
+}
+
+/* ---------------- COM ports ---------------- */
+function renderCom(p){
+  var list = arr(g(p, "com_ports", []));
+  setText("comCount", list.length + (list.length === 1 ? " port" : " ports"));
+  var html;
+  if (!list.length){
+    html = '<div class="empty">no COM ports reported (a phone in download mode usually shows one)</div>';
+  } else {
+    html = '<table><thead><tr><th>Port</th><th>Device</th></tr></thead><tbody>';
+    for (var i = 0; i < list.length; i++){
+      var it = list[i];
+      var nm = isObj(it) ? (g(it,"name",null) || g(it,"port",null) || g(it,"com",null)) : it;
+      var dv = isObj(it) ? (g(it,"device",null) || g(it,"description",null)) : null;
+      html += '<tr><td>' + esc(s(nm)) + '</td><td class="wide">' + esc(s(dv)) + '</td></tr>';
+    }
+    html += '</tbody></table>';
+  }
+  setHTML("comBody", html);
+}
+
+/* ---------------- timeline ---------------- */
+function modeOf(entry, previousMode){
+  var dev = g(entry, "device", null);
+  var m = null;
+  if (isObj(dev)) m = g(dev, "mode", null);
+  if (m === null) m = g(entry, "mode", null);
+  if (m === null){
+    // infer from presence flags if the writer only gives those
+    var pres = isObj(dev) ? g(dev,"present",null) : g(entry,"present",null);
+    if (pres === false) m = "absent";
+    else if (pres === true) m = previousMode || "unknown";
+  }
+  if (m === null) m = "unknown";
+  return String(m).toLowerCase().trim() || "unknown";
+}
+
+function renderTimeline(p){
+  var hist = arr(g(p, "history", []));
+  var count = hist.length;
+  setText("tlCount", count + (count === 1 ? " point" : " points"));
+  var hn = el("histNote");
+  if (hn) hn.textContent = count + " entries \u00B7 " + s(g(g(p,"_meta",{}),"history_file","history.jsonl"));
+  try { setText("rawHist", JSON.stringify(hist.slice(-25), null, 2)); } catch(e){ setText("rawHist", "\u2014"); }
+
+  var pts = [];
+  for (var i = 0; i < count; i++){
+    var e = hist[i];
+    if (!isObj(e)) continue;
+    var t = msOf(g(e,"timestamp",null));
+    if (t === null) t = msOf(g(e,"ts",null));
+    if (t === null) t = msOf(g(e,"time",null));
+    pts.push({ t:t, mode: modeOf(e, pts.length ? pts[pts.length-1].mode : null), seq: g(e,"seq",null), raw:e });
+  }
+  pts.sort(function(a,b){
+    var ta = a.t === null ? 0 : a.t, tb = b.t === null ? 0 : b.t;
+    return ta - tb;
+  });
+
+  if (!pts.length){
+    setHTML("tlbar", '<div class="tlseg m-unknown" style="flex:1 1 auto" title="no history yet"></div>');
+    setText("tickFrom", "\u2014"); setText("tickTo", "now"); setText("tickMid","");
+    setHTML("events", '<div class="empty">no history.jsonl yet \u2014 the timeline fills in as phonewatch appends snapshots.</div>');
+    return;
+  }
+
+  var now = Date.now();
+  var endT = pts[pts.length-1].t;
+  if (endT === null) endT = now;
+  var startT = (pts[0].t === null) ? endT - 1000 : pts[0].t;
+  if (endT <= startT) endT = startT + 1000;
+  var total = endT - startT;
+
+  var segs = [], eventsHtml = "";
+  for (var k = 0; k < pts.length; k++){
+    var cur = pts[k], from = (cur.t === null) ? startT : cur.t;
+    var to = (k + 1 < pts.length && pts[k+1].t !== null) ? pts[k+1].t : endT + Math.min(1500, Math.max(0, now - endT));
+    if (to < from) to = from;
+    var dur = to - from;
+    var weight = Math.max(dur, total * 0.004);
+    var tip = clockMs(cur.t ? new Date(cur.t).toISOString() : null) + "  " + cur.mode + "  " + fmtDur(dur);
+    segs.push('<div class="tlseg m-' + esc(cur.mode) + '" style="flex:' + weight.toFixed(2) + ' 1 0" title="' +
+              esc(tip) + '"></div>');
+    eventsHtml += '<div class="ev"><span class="t">' + esc(clockMs(cur.t ? new Date(cur.t).toISOString() : null)) + '</span>' +
+                  '<span class="what"><span class="chip ' + esc(modeInfo(cur.mode).info.cls) + '">' + esc(cur.mode) + '</span>' +
+                  (cur.seq !== null && cur.seq !== undefined ? ' <span class="dim">seq ' + esc(s(cur.seq)) + '</span>' : '') +
+                  '</span><span class="dur">' + esc(fmtDur(dur)) + '</span></div>';
+  }
+  setHTML("tlbar", segs.join(""));
+  setHTML("events", eventsHtml);
+
+  setText("tickFrom", new Date(startT).toLocaleTimeString([], {hour12:false}));
+  setText("tickMid",  new Date((startT+endT)/2).toLocaleTimeString([], {hour12:false}));
+  setText("tickTo",   new Date(endT).toLocaleTimeString([], {hour12:false}) + "  (span " + fmtDur(total) + ")");
+
+  // if the newest point is old, note it in the tick label
+  if (now - endT > STALE_MS + 2000){
+    setText("tickTo", new Date(endT).toLocaleTimeString([], {hour12:false}) +
+      "  (span " + fmtDur(total) + ", newest " + fmtAge((now-endT)/1000) + ")");
+  }
+}
+
+/* ---------------- boot ---------------- */
+function bootPolls(){
+  poll(); pollIphone();
+  setInterval(poll, POLL_MS);
+  setInterval(pollIphone, POLL_MS);          // iPhone on the same 2s cadence
+  setInterval(paintConnection, 500);        // keep the "Xs ago" clocks ticking
+  var rb = el("refreshBtn");
+  if (rb) rb.addEventListener("click", function(){ poll(); pollIphone(); });
+  paintConnection();
+}
+document.addEventListener("DOMContentLoaded", bootPolls);
+if (document.readyState === "interactive" || document.readyState === "complete") {
+  // DOMContentLoaded may already have fired if the script is parsed late
+  try { bootPolls(); } catch(e){}
+}
+</script>
+</body>
+</html>
